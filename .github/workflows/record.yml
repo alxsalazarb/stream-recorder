@@ -1,0 +1,37 @@
+name: Record Stream
+
+on:
+  workflow_dispatch:
+    inputs:
+      stream_url:
+        description: 'Target Room Web URL'
+        required: true
+        default: ''
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Streamlink
+        run: |
+          python -m pip install --upgrade pip
+          pip install streamlink
+
+      - name: Download Stream
+        run: |
+          streamlink "${{ github.event.inputs.stream_url }}" best -o output.mp4 --hls-live-restart
+
+      - name: Upload Video Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: recorded-stream
+          path: output.mp4
+          retention-days: 1
