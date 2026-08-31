@@ -29,19 +29,26 @@ jobs:
 
       - name: Download Stream
         run: |
-          # Automatically stop recording gracefully after 5h 50m (21000s)
           timeout --preserve-status 21000s yt-dlp "${{ github.event.inputs.stream_url }}" \
-            -o "recording_%(epoch)s.%(ext)s" \
+            -o "raw_recording_%(epoch)s.ts" \
             --impersonate chrome \
-            --no-part \
+            --hls-use-mpegts \
             --fragment-retries infinite \
             --retry-sleep 5 \
             --retries 10 || true
+
+      - name: Fix and Clean Video Container
+        if: always()
+        run: |
+          for f in raw_recording_*.ts; do
+            [ -e "$f" ] || continue
+            ffmpeg -err_detect ignore_err -i "$f" -c copy "fixed_${f%.ts}.mp4"
+          done
 
       - name: Upload Video Artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: recorded-stream
-          path: recording_*.*
+          path: fixed_*.mp4
           retention-days: 1
