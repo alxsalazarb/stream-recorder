@@ -1,4 +1,5 @@
 name: Record Stream
+run-name: "Recording: ${{ github.event.inputs.label || github.event.inputs.stream_url }}"
 
 on:
   workflow_dispatch:
@@ -6,6 +7,10 @@ on:
       stream_url:
         description: 'Target Room Web URL'
         required: true
+        default: ''
+      label:
+        description: 'Model Name / Custom Label (Optional)'
+        required: false
         default: ''
 
 jobs:
