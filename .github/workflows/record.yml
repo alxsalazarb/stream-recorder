@@ -20,7 +20,7 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install Dependencies & yt-dlp with impersonation
+      - name: Install Dependencies
         run: |
           sudo apt-get update && sudo apt-get install -y ffmpeg
           python -m pip install --upgrade pip
@@ -28,11 +28,18 @@ jobs:
 
       - name: Download Stream
         run: |
-          yt-dlp "${{ github.event.inputs.stream_url }}" -o "output.mp4" --impersonate chrome --concurrent-fragments 5
+          yt-dlp "${{ github.event.inputs.stream_url }}" \
+            -o "stream_%(epoch)s.ts" \
+            --impersonate chrome \
+            --hls-use-mpegts \
+            --fragment-retries infinite \
+            --retry-sleep 5 \
+            --retries 10
 
       - name: Upload Video Artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: recorded-stream
-          path: output.mp4
+          path: "*.ts"
           retention-days: 1
