@@ -30,25 +30,19 @@ jobs:
       - name: Download Stream
         run: |
           timeout --preserve-status 21000s yt-dlp "${{ github.event.inputs.stream_url }}" \
-            -o "raw_recording_%(epoch)s.ts" \
+            -o "stream_%(epoch)s.%(ext)s" \
             --impersonate chrome \
             --hls-use-mpegts \
+            --recode-video mp4 \
+            --no-part \
             --fragment-retries infinite \
             --retry-sleep 5 \
             --retries 10 || true
-
-      - name: Fix and Clean Video Container
-        if: always()
-        run: |
-          for f in raw_recording_*.ts; do
-            [ -e "$f" ] || continue
-            ffmpeg -err_detect ignore_err -i "$f" -c copy "fixed_${f%.ts}.mp4"
-          done
 
       - name: Upload Video Artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: recorded-stream
-          path: fixed_*.mp4
+          path: stream_*.*
           retention-days: 1
