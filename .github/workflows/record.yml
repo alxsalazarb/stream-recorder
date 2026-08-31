@@ -29,9 +29,9 @@ jobs:
       - name: Download Stream
         run: |
           yt-dlp "${{ github.event.inputs.stream_url }}" \
-            -o "stream_%(epoch)s.ts" \
+            -o "recording_%(epoch)s.%(ext)s" \
             --impersonate chrome \
-            --hls-use-mpegts \
+            --no-part \
             --fragment-retries infinite \
             --retry-sleep 5 \
             --retries 10
@@ -41,5 +41,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: recorded-stream
-          path: "*.ts"
+          path: recording_*.*
           retention-days: 1
