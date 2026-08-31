@@ -11,6 +11,7 @@ on:
 jobs:
   record:
     runs-on: ubuntu-latest
+    timeout-minutes: 360
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -28,13 +29,14 @@ jobs:
 
       - name: Download Stream
         run: |
-          yt-dlp "${{ github.event.inputs.stream_url }}" \
+          # Automatically stop recording gracefully after 5h 50m (21000s)
+          timeout --preserve-status 21000s yt-dlp "${{ github.event.inputs.stream_url }}" \
             -o "recording_%(epoch)s.%(ext)s" \
             --impersonate chrome \
             --no-part \
             --fragment-retries infinite \
             --retry-sleep 5 \
-            --retries 10
+            --retries 10 || true
 
       - name: Upload Video Artifact
         if: always()
