@@ -32,22 +32,64 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -U "yt-dlp[default,curl-cffi]"
 
-      - name: Download Stream
+      - name: Download Stream with Auto-Reconnect
         run: |
-          timeout --preserve-status 21000s yt-dlp "${{ github.event.inputs.stream_url }}" \
-            -o "stream_%(epoch)s.%(ext)s" \
-            --impersonate chrome \
-            --hls-use-mpegts \
-            --recode-video mp4 \
-            --no-part \
-            --fragment-retries infinite \
-            --retry-sleep 5 \
-            --retries 10 || true
+          # Create a subfolder to isolate video segments
+          mkdir -p segments
+          
+          # Define end time (5 hours 50 minutes from now)
+          END_TIME=$(($(date +%s) + 21000))
+          
+          while [ $(date +%s) -lt $END_TIME ]; do
+            echo "Starting/Resuming stream recording at $(date)..."
+            
+            yt-dlp "${{ github.event.inputs.stream_url }}" \
+              -o "segments/part_%(epoch)s.%(ext)s" \
+              --impersonate chrome \
+              --hls-use-mpegts \
+              --recode-video mp4 \
+              --no-part \
+              --fragment-retries infinite \
+              --retry-sleep 5 \
+              --retries 10 || true
+            
+            NOW=$(date +%s)
+            if [ $NOW -ge $END_TIME ]; then
+              echo "Timeout reached. Stopping recording loop."
+              break
+            fi
+            
+            echo "Stream dropped or stream ended. Waiting 10 seconds before polling again..."
+            sleep 10
+          done
+
+      - name: Merge Video Segments
+        if: always()
+        run: |
+          cd segments
+          # Count how many mp4 files were generated
+          FILE_COUNT=$(ls -1 part_*.mp4 2>/dev/null | wc -l)
+          
+          if [ "$FILE_COUNT" -eq 0 ]; then
+            echo "No files recorded."
+          elif [ "$FILE_COUNT" -eq 1 ]; then
+            echo "Only one segment recorded, copying directly..."
+            cp part_*.mp4 ../final_recording.mp4
+          else
+            echo "Multiple segments found. Merging $FILE_COUNT parts into one file..."
+            # Create a file list for ffmpeg concat
+            for f in $(ls -1v part_*.mp4); do
+              echo "file '$f'" >> filelist.txt
+            done
+            
+            # Stitch files cleanly without re-encoding
+            ffmpeg -f concat -safe 0 -i filelist.txt -c copy ../final_recording.mp4
+          fi
 
       - name: Upload Video Artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: recorded-stream
-          path: stream_*.*
+          path: final_recording.mp4
           retention-days: 1
