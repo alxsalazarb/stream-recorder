@@ -34,10 +34,7 @@ jobs:
 
       - name: Download Stream with Auto-Reconnect
         run: |
-          # Create a subfolder to isolate video segments
           mkdir -p segments
-          
-          # Define end time (5 hours 50 minutes from now)
           END_TIME=$(($(date +%s) + 21000))
           
           while [ $(date +%s) -lt $END_TIME ]; do
@@ -47,7 +44,9 @@ jobs:
               -o "segments/part_%(epoch)s.%(ext)s" \
               --impersonate chrome \
               --hls-use-mpegts \
+              --hls-split-discontinuity \
               --recode-video mp4 \
+              --postprocessor-args "ffmpeg:-async 1 -vsync 1" \
               --no-part \
               --fragment-retries infinite \
               --retry-sleep 5 \
@@ -67,7 +66,6 @@ jobs:
         if: always()
         run: |
           cd segments
-          # Count how many mp4 files were generated
           FILE_COUNT=$(ls -1 part_*.mp4 2>/dev/null | wc -l)
           
           if [ "$FILE_COUNT" -eq 0 ]; then
@@ -77,13 +75,12 @@ jobs:
             cp part_*.mp4 ../final_recording.mp4
           else
             echo "Multiple segments found. Merging $FILE_COUNT parts into one file..."
-            # Create a file list for ffmpeg concat
             for f in $(ls -1v part_*.mp4); do
               echo "file '$f'" >> filelist.txt
             done
             
-            # Stitch files cleanly without re-encoding
-            ffmpeg -f concat -safe 0 -i filelist.txt -c copy ../final_recording.mp4
+            # Use async timestamp correction during merging
+            ffmpeg -f concat -safe 0 -i filelist.txt -c copy -fflags +genpts ../final_recording.mp4
           fi
 
       - name: Upload Video Artifact
