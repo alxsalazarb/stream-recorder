@@ -16,10 +16,16 @@ on:
 jobs:
   record:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 330 # Safe buffer before GitHub's hard 360-min cap
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Free Disk Space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -35,7 +41,8 @@ jobs:
       - name: Download Stream with Auto-Reconnect
         run: |
           mkdir -p segments
-          END_TIME=$(($(date +%s) + 21000))
+          # Stop recording loop after 5 hours (18000s) to guarantee cleanup time
+          END_TIME=$(($(date +%s) + 18000))
           
           while [ $(date +%s) -lt $END_TIME ]; do
             echo "Starting/Resuming stream recording at $(date)..."
@@ -53,11 +60,11 @@ jobs:
             
             NOW=$(date +%s)
             if [ $NOW -ge $END_TIME ]; then
-              echo "Timeout reached. Stopping recording loop."
+              echo "Timeout reached. Stopping recording loop safely."
               break
             fi
             
-            echo "Stream dropped or stream ended. Waiting 10 seconds before polling again..."
+            echo "Stream dropped or ended. Polling again in 10 seconds..."
             sleep 10
           done
 
@@ -66,11 +73,12 @@ jobs:
         run: |
           cd segments
           
-          # Recover any unfinalized or raw files (.ts, .part, .ytdl) if canceled mid-recording
+          # Recover raw/interrupted chunks (.ts, .part, .ytdl)
           for raw in *.ts *.part *.ytdl; do
             if [ -f "$raw" ]; then
               echo "Recovering raw chunk: $raw"
               ffmpeg -y -i "$raw" -c copy "recovered_$(date +%s).mp4" 2>/dev/null || true
+              rm -f "$raw"
             fi
           done
 
@@ -78,21 +86,29 @@ jobs:
           
           if [ "$FILE_COUNT" -eq 0 ]; then
             echo "No video files found."
+            echo "No video data recorded." > ../final_recording.txt
           elif [ "$FILE_COUNT" -eq 1 ]; then
-            echo "Single segment found, copying directly..."
+            echo "Single segment found, finalizing..."
             cp *.mp4 ../final_recording.mp4
           else
-            echo "Merging $FILE_COUNT parts into final file..."
+            echo "Merging $FILE_COUNT segments..."
             for f in $(ls -1v *.mp4); do
               echo "file '$f'" >> filelist.txt
             done
             ffmpeg -f concat -safe 0 -i filelist.txt -c copy -fflags +genpts ../final_recording.mp4
           fi
 
+      - name: Clean Up Raw Chunks Before Upload
+        if: always()
+        run: rm -rf segments/
+
       - name: Upload Video Artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: recorded-stream
-          path: final_recording.mp4
+          path: |
+            final_recording.mp4
+            final_recording.txt
           retention-days: 7
+          compression-level: 0 # Speeds up artifact creation for large video files
