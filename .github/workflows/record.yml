@@ -47,7 +47,6 @@ jobs:
               --hls-split-discontinuity \
               --recode-video mp4 \
               --postprocessor-args "ffmpeg:-async 1 -vsync 1" \
-              --no-part \
               --fragment-retries infinite \
               --retry-sleep 5 \
               --retries 10 || true
@@ -66,20 +65,27 @@ jobs:
         if: always()
         run: |
           cd segments
-          FILE_COUNT=$(ls -1 part_*.mp4 2>/dev/null | wc -l)
+          
+          # Recover any unfinalized or raw files (.ts, .part, .ytdl) if canceled mid-recording
+          for raw in *.ts *.part *.ytdl; do
+            if [ -f "$raw" ]; then
+              echo "Recovering raw chunk: $raw"
+              ffmpeg -y -i "$raw" -c copy "recovered_$(date +%s).mp4" 2>/dev/null || true
+            fi
+          done
+
+          FILE_COUNT=$(ls -1 *.mp4 2>/dev/null | wc -l)
           
           if [ "$FILE_COUNT" -eq 0 ]; then
-            echo "No files recorded."
+            echo "No video files found."
           elif [ "$FILE_COUNT" -eq 1 ]; then
-            echo "Only one segment recorded, copying directly..."
-            cp part_*.mp4 ../final_recording.mp4
+            echo "Single segment found, copying directly..."
+            cp *.mp4 ../final_recording.mp4
           else
-            echo "Multiple segments found. Merging $FILE_COUNT parts into one file..."
-            for f in $(ls -1v part_*.mp4); do
+            echo "Merging $FILE_COUNT parts into final file..."
+            for f in $(ls -1v *.mp4); do
               echo "file '$f'" >> filelist.txt
             done
-            
-            # Use async timestamp correction during merging
             ffmpeg -f concat -safe 0 -i filelist.txt -c copy -fflags +genpts ../final_recording.mp4
           fi
 
@@ -89,4 +95,4 @@ jobs:
         with:
           name: recorded-stream
           path: final_recording.mp4
-          retention-days: 1
+          retention-days: 7
