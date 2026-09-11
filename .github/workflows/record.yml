@@ -16,7 +16,7 @@ on:
 jobs:
   record:
     runs-on: ubuntu-latest
-    timeout-minutes: 330 # Safe buffer before GitHub's hard 360-min cap
+    timeout-minutes: 330
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -41,7 +41,6 @@ jobs:
       - name: Download Stream with Auto-Reconnect
         run: |
           mkdir -p segments
-          # Stop recording loop after 5 hours (18000s) to guarantee cleanup time
           END_TIME=$(($(date +%s) + 18000))
           
           while [ $(date +%s) -lt $END_TIME ]; do
@@ -95,7 +94,8 @@ jobs:
             for f in $(ls -1v *.mp4); do
               echo "file '$f'" >> filelist.txt
             done
-            ffmpeg -f concat -safe 0 -i filelist.txt -c copy -fflags +genpts ../final_recording.mp4
+            # Ignore corrupt timestamps and bitstream errors to ensure full merge
+            ffmpeg -f concat -safe 0 -i filelist.txt -c copy -fflags +genpts+igndts -err_detect ignore_err ../final_recording.mp4 || true
           fi
 
       - name: Clean Up Raw Chunks Before Upload
@@ -111,4 +111,4 @@ jobs:
             final_recording.mp4
             final_recording.txt
           retention-days: 7
-          compression-level: 0 # Speeds up artifact creation for large video files
+          compression-level: 0
