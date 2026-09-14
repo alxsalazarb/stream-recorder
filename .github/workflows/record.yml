@@ -36,7 +36,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y ffmpeg
           python -m pip install --upgrade pip
-          python -m pip install -U "yt-dlp[default,curl-cffi]"
+          python -m pip install -U streamlink yt-dlp
 
       - name: Download Stream with Auto-Reconnect
         run: |
@@ -46,16 +46,12 @@ jobs:
           while [ $(date +%s) -lt $END_TIME ]; do
             echo "Starting/Resuming stream recording at $(date)..."
             
-            yt-dlp "${{ github.event.inputs.stream_url }}" \
-              -o "segments/part_%(epoch)s.mp4" \
-              --impersonate chrome \
-              --referer "https://stripchat.com/" \
-              --add-header "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
-              --hls-use-mpegts \
-              --hls-split-discontinuity \
-              --fragment-retries infinite \
-              --retry-sleep 5 \
-              --retries 10 || true
+            streamlink "${{ github.event.inputs.stream_url }}" best \
+              -o "segments/part_$(date +%s).mp4" \
+              --hls-live-restart \
+              --hls-segment-threads 3 \
+              --http-header "User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
+              --http-header "Referer=https://stripchat.com/" || true
             
             NOW=$(date +%s)
             if [ $NOW -ge $END_TIME ]; then
