@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       stream_url:
-        description: 'Target Room Web URL'
+        description: 'Target Room Web URL or Direct .m3u8 Link'
         required: true
         default: ''
       label:
@@ -47,14 +47,12 @@ jobs:
             echo "Starting/Resuming stream recording at $(date)..."
             
             yt-dlp "${{ github.event.inputs.stream_url }}" \
-              -o "segments/part_%(epoch)s.%(ext)s" \
+              -o "segments/part_%(epoch)s.mp4" \
               --impersonate chrome \
               --referer "https://stripchat.com/" \
               --add-header "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
               --hls-use-mpegts \
               --hls-split-discontinuity \
-              --recode-video mp4 \
-              --postprocessor-args "ffmpeg:-async 1 -vsync 1" \
               --fragment-retries infinite \
               --retry-sleep 5 \
               --retries 10 || true
