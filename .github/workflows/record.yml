@@ -26,6 +26,7 @@ jobs:
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /usr/local/lib/android
           sudo rm -rf /opt/ghc
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -36,6 +37,7 @@ jobs:
           sudo apt-get update && sudo apt-get install -y ffmpeg
           python -m pip install --upgrade pip
           python -m pip install -U "yt-dlp[default,curl-cffi]"
+
       - name: Download Stream with Auto-Reconnect
         run: |
           mkdir -p segments
@@ -64,6 +66,7 @@ jobs:
             echo "Stream dropped or ended. Polling again in 10 seconds..."
             sleep 10
           done
+
       - name: Merge Video Segments
         if: always()
         run: |
@@ -77,6 +80,7 @@ jobs:
               rm -f "$raw"
             fi
           done
+
           FILE_COUNT=$(ls -1 *.mp4 2>/dev/null | wc -l)
           
           if [ "$FILE_COUNT" -eq 0 ]; then
@@ -93,6 +97,7 @@ jobs:
             # Ignore corrupt timestamps and bitstream errors to ensure full merge
             ffmpeg -f concat -safe 0 -i filelist.txt -c copy -fflags +genpts+igndts -err_detect ignore_err ../final_recording.mp4 || true
           fi
+
       - name: Clean Up Raw Chunks Before Upload
         if: always()
         run: rm -rf segments/
