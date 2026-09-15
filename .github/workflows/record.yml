@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       stream_url:
-        description: 'Target Room Web URL'
+        description: 'Target Room Web URL or Direct .m3u8 Link'
         required: true
         default: ''
       label:
@@ -59,12 +59,12 @@ jobs:
             
             NOW=$(date +%s)
             if [ $NOW -ge $END_TIME ]; then
-              echo "Timeout reached. Stopping recording loop safely."
+              echo "5-hour target reached. Stopping recording loop safely."
               break
             fi
             
-            echo "Stream dropped or ended. Polling again in 10 seconds..."
-            sleep 10
+            echo "Stream disconnected or ended temporarily. Retrying in 15 seconds..."
+            sleep 15
           done
 
       - name: Merge Video Segments
