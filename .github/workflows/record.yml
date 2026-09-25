@@ -47,12 +47,10 @@ jobs:
             echo "Starting/Resuming stream recording at $(date)..."
             
             yt-dlp "${{ github.event.inputs.stream_url }}" \
-              -o "segments/part_%(epoch)s.%(ext)s" \
+              -o "segments/part_%(epoch)s.ts" \
               --impersonate chrome \
               --hls-use-mpegts \
               --hls-split-discontinuity \
-              --recode-video mp4 \
-              --postprocessor-args "ffmpeg:-async 1 -vsync 1" \
               --fragment-retries infinite \
               --retry-sleep 5 \
               --retries 10 || true
@@ -72,30 +70,31 @@ jobs:
         run: |
           cd segments
           
-          # Recover raw/interrupted chunks (.ts, .part, .ytdl)
+          # Clean up any raw/interrupted chunks
           for raw in *.ts *.part *.ytdl; do
             if [ -f "$raw" ]; then
               echo "Recovering raw chunk: $raw"
-              ffmpeg -y -i "$raw" -c copy "recovered_$(date +%s).mp4" 2>/dev/null || true
+              ffmpeg -y -i "$raw" -c copy "recovered_$(date +%s).ts" 2>/dev/null || true
               rm -f "$raw"
             fi
           done
 
-          FILE_COUNT=$(ls -1 *.mp4 2>/dev/null | wc -l)
+          FILE_COUNT=$(ls -1 *.ts 2>/dev/null | wc -l)
           
           if [ "$FILE_COUNT" -eq 0 ]; then
             echo "No video files found."
             echo "No video data recorded." > ../final_recording.txt
           elif [ "$FILE_COUNT" -eq 1 ]; then
-            echo "Single segment found, finalizing..."
-            cp *.mp4 ../final_recording.mp4
+            echo "Single segment found, finalizing with audio fix..."
+            ffmpeg -y -i *.ts -c:v copy -c:a aac -af "aresample=async=1000" -movflags +faststart ../final_recording.mp4 || cp *.ts ../final_recording.mp4
           else
-            echo "Merging $FILE_COUNT segments..."
-            for f in $(ls -1v *.mp4); do
+            echo "Merging $FILE_COUNT segments with audio sync repair..."
+            for f in $(ls -1v *.ts); do
               echo "file '$f'" >> filelist.txt
             done
-            # Ignore corrupt timestamps and bitstream errors to ensure full merge
-            ffmpeg -f concat -safe 0 -i filelist.txt -c copy -fflags +genpts+igndts -err_detect ignore_err ../final_recording.mp4 || true
+            
+            # Merge while re-syncing AAC audio timestamps and adding faststart for iOS
+            ffmpeg -f concat -safe 0 -i filelist.txt -c:v copy -c:a aac -af "aresample=async=1000" -fflags +genpts+igndts -err_detect ignore_err -movflags +faststart ../final_recording.mp4 || true
           fi
 
       - name: Clean Up Raw Chunks Before Upload
